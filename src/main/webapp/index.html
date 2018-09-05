@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Database Stress Tester</title>
+<link href="css/bootstrap.min.css" rel="stylesheet">
+<style>
+
+.axis path {
+    fill: none;
+    stroke: #777;
+    shape-rendering: crispEdges;
+}
+.axis text {
+    font-family: Lato;
+    font-size: 13px;
+}
+
+</style>
+<script src="js/jquery-3.3.1.min.js"></script> 
+<script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+
+
+</head>
+<body>
+ 
+    <div class="container">
+ 
+        <div class="jumbotron">
+			<h1>Database Stress Tester</h1>
+			<p>
+			This application is designed to continually run SQL queries on a MySQL/MariaDB
+			database and reporting on the overall time to perform a set number of inserts,
+			selects and deletes.  This application can spin up to 10 separate threads to 
+			perform these operations simultaneously (from a set of pooled collections).
+			</p>
+        </div>
+        
+        <div class="container">
+        
+			<form id="startForm">
+				<div class="form-row">
+					<div class="form-group col-md-6">
+						<label for="inputHost">Host</label>
+						<input type="text" class="form-control" id="inputHost" placeholder="host:port">
+					</div>
+					<div class="form-group col-md-6">
+						<label for="inputDbName">DB Name</label>
+						<input type="text" class="form-control" id="inputDbName" placeholder="dbname">
+					</div>
+				</div>
+
+				<div class="form-group row">
+					<div class="form-group col-md-6">
+						<label for="inputUser">User</label>
+						<input type="text" class="form-control" id="inputUser" placeholder="user">
+					</div>
+					<div class="form-group col-md-6">
+						<label for="inputPass">Password</label>
+						<input type="password" class="form-control" id="inputPass" placeholder="password">
+					</div>
+				</div>
+				
+				<div class="form-group row">
+					<div class="form-group col-md-3">
+					<label for="inputThreads">Threads</label>
+						<select id="inputThreads" class="form-control">
+							<option>10</option>
+							<option>9</option>
+							<option>8</option>
+							<option>7</option>
+							<option>6</option>
+							<option selected>5</option>
+							<option>4</option>
+							<option>3</option>
+							<option>2</option>
+							<option>1</option>
+						</select>
+					</div>
+					<div class="form-group col-md-3">
+						<label for="inputRunSize">Queries per Run</label>
+						<input type="text" class="form-control" id="inputRunSize" placeholder="20">
+					</div>
+				</div>
+				
+				<div class="form-group row">
+    				<div class="col-sm-10">
+						<button id="startButton" type="button" class="btn btn-primary mb-2" onclick="startTest()">Start Test</button>
+					</div>
+				</div>
+
+			</form>
+        
+        </div>
+        
+        <div class="container">
+        	<svg id="visualisation" width="800" height="200"></svg>
+ 		</div>
+
+		<div class="container">
+			<form action="StopTest" method="POST">
+				
+				<div class="form-group row">
+    				<div class="col-sm-10">
+						<button type="button" class="btn btn-primary mb-2" onclick="stopTest()">Stop Test</button>
+					</div>
+				</div>
+
+			</form>
+		</div>
+
+		<div class="container" style="height: 200px; width: 100%; "><br>
+				<textarea id="console" style="width: 100%; min-height: 200px; font-family:'Courier'; font-size: 8pt;" > </textarea>
+		</div>
+
+	</div>
+ 		
+ <script>
+ 
+var graphInter;
+var consoleInter
+ 
+function startTest() {
+	var elm = document.getElementById("console");
+	if( elm ) {
+		elm.value = "";
+	}
+	var host = $('#inputHost').val();
+	var dbname =  $('#inputDbName').val();
+	var user = $('#inputUser').val();
+	var pass = $('#inputPass').val();
+	var threads = $('#inputThreads').val();
+	var threads = $('#inputThreads').val();
+	var runSize = $('#inputRunSize').val();
+	if( host!="" && dbname != "" && user !="" && pass != "" && runSize != ""){
+	    $.ajax(
+	    		{
+	        		url: 'StartTest',
+	        		type: 'POST',
+	        		data: {
+	            			"host": host,
+	            			"dbname":dbname,
+	            			"user": user,
+	            			"pass": pass,
+	            			"threads": threads,
+	            			"runSize": runSize
+	        		}
+	    		}
+	    ).done( function(err,response) {
+	    	if( err ) {
+	    		alert(err);
+	    	} else {
+		    	graphInter = setInterval(function() {
+		    	    updateData();
+		    	}, 200); 
+
+
+		    	consoleInter = setInterval(function() {
+		    	    updateConsole();
+		    	}, 1000); 
+	    	}
+	    });               
+	} else {
+		alert('Fill in all fields.');
+	}
+	
+
+};
+
+function stopTest(){
+	 clearInterval(graphInter);
+	 clearInterval(consoleInter);
+	 $.ajax({ url: 'StopTest', type: 'POST'});
+}
+
+
+var vis = d3.select("#visualisation"),
+ WIDTH = 600,
+ HEIGHT = 200,
+ MARGINS = {
+     top: 20,
+     right: 20,
+     bottom: 20,
+     left: 70
+ };
+ 
+var xScale = d3.scale.linear().range([MARGINS.left, WIDTH - MARGINS.right]).domain([0,100]);
+var yScale = d3.scale.linear().range([HEIGHT - MARGINS.top, MARGINS.bottom]).domain([0,300]);
+
+
+ 
+var xAxis = d3.svg.axis().scale(xScale).ticks(0);
+var yAxis = d3.svg.axis().scale(yScale).ticks(5).orient("left");
+
+vis.append("g")
+.attr("class","axis")
+.attr("transform", "translate(0," + (HEIGHT - MARGINS.bottom) + ")")
+.call(xAxis);
+
+var yg = vis.append("g")
+.attr("class","axis")
+.attr("transform", "translate(" + (MARGINS.left) + ",0)")
+.call(yAxis);
+
+vis.append("text")
+.attr("transform", "rotate(-90)")
+.attr("y", 0 )
+.attr("x", -(HEIGHT/2) )
+.attr("dy", "1em")
+.style("text-anchor", "middle")
+.text("Response Time (ms)");
+
+var lineGen = d3.svg.line()
+.x(function(d) {
+    return xScale(d.index);
+})
+.y(function(d) {
+    return yScale(d.runTime);
+})
+.interpolate("basis");
+
+
+var myLine;
+
+function updateData() {
+	
+	d3.json("data", function(error, data) {
+		
+		/* yScale = d3.scale.linear()
+		.domain([0, d3.max(data, function (d) { return d.runTime + 10; })]).range([MARGINS.top, HEIGHT - MARGINS.bottom]);  // Set margins for y specific
+		yAxis = d3.svg.axis().scale(yScale).orient("left");
+		vis.remove("svg:g");
+		vis.append("svg:g")
+		.attr("class","axis")
+		.attr("transform", "translate(" + (MARGINS.left) + ",0)")
+		.call(yAxis);
+	     */
+
+	     yScale.domain([0, d3.max(data, function(d) { return d.runTime; })]);
+	     
+	     if( yg ) yg.remove();
+	     
+	     yg = vis.append("g")
+	     .attr("class","axis")
+	     .attr("transform", "translate(" + (MARGINS.left) + ",0)")
+	     .call(yAxis);
+	     
+	    if( myLine ) {
+	    	myLine.remove();
+	    }
+	     
+		myLine = vis.append('path')
+		.attr('d', lineGen(data))
+		.attr('stroke', 'green')
+		.attr('stroke-width', 2)
+		.attr('fill', 'none');
+		
+
+	});
+
+}
+
+function updateConsole(){
+    $.ajax(
+    		{
+        		url: 'log',
+        		type: 'GET'
+    		}
+    ).done( function(err,response) {
+    	var elm = document.getElementById("console");
+		if( elm ) {
+			if( err ) {
+				var val = elm.value;
+				if( val.length>0 ){
+					val = val + '\n' + err;
+				} else {
+					val = err;
+				}
+				elm.value = val;
+				elm.scrollTop = elm.scrollHeight;
+			}
+		}
+	});               
+
+}
+
+
+
+</script>
+ 
+ 
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+ 
+</body>
+</html>
