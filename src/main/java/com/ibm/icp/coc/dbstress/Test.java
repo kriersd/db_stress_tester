@@ -33,6 +33,13 @@ public class Test extends Thread {
 		while (!canceled) {
 			items = new ArrayList<String>();
 
+			try {
+				Thread.sleep((long)(Math.random() * 1000));
+			} catch (InterruptedException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+			
 			long startTime = System.currentTimeMillis();
 
 			for (int i = 0; (i < runSize && !canceled); i++) {
@@ -56,7 +63,14 @@ public class Test extends Thread {
 					//e.printStackTrace();
 				}
 			}
-
+			
+			try {
+				Thread.sleep((long)(Math.random() * 1000));
+			} catch (InterruptedException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+			
 			// now remove them
 			while (!items.isEmpty()) {
 				try {
